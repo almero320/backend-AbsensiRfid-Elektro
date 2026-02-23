@@ -259,7 +259,7 @@ try {
     // Kirim WA (opsional, tetap jalan)
     try {
       const data = new FormData();
-      data.append('target', '6282227097005');
+      data.append('target', '6289649085403');
       data.append('message', `${message}!\nNama: ${user.name}\nWaktu: ${now.toLocaleString('id-ID')}`);
       await axios.post('https://api.fonnte.com/send', data, {
         headers: { ...data.getHeaders(), Authorization: process.env.FONNTE_TOKEN }
@@ -274,6 +274,7 @@ try {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
+
 
 
 
