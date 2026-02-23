@@ -14,18 +14,35 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // untuk ESP32
 
-mongoose.connect(process.env.MONGO_URL, {
-  serverSelectionTimeoutMS: 30000,   // 30 detik timeout
-  socketTimeoutMS: 60000,
-  connectTimeoutMS: 30000,
-  family: 4  // pakai IPv4 (Railway kadang IPv6 bermasalah)
-})
-  .then(() => {
+mongoose.connect(process.env.MONGO_URL)
+  .then(async () => {
     console.log('[DB] MongoDB connected successfully');
+
+    // Auto create admin SETELAH CONNECT
+    try {
+      const exists = await User.findOne({ username: 'admin' });
+      if (!exists) {
+        const hashed = await bcrypt.hash('admin123', 10);
+        await new User({
+          name: 'Administrator',
+          username: 'admin',
+          password: hashed,
+          role: 'admin',
+          rfid_uid: 'ADMIN000',
+          attendance: []
+        }).save();
+        console.log('[INIT] Default admin created');
+      }
+    } catch (err) {
+      console.error('[INIT] Error:', err.message);
+    }
+
+    // START SERVER SETELAH DB SIAP
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, '0.0.0.0', () => console.log(`Server jalan di port ${PORT}`));
   })
   .catch(err => {
     console.error('[DB] MongoDB connection error:', err.message);
-    console.error('[DB] Full error stack:', err.stack);
   });
 
 const userSchema = new mongoose.Schema({
@@ -46,27 +63,6 @@ const userSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model('User', userSchema);
-
-// Auto create admin
-(async () => {
-  try {
-    const exists = await User.findOne({ username: 'admin' });
-    if (!exists) {
-      const hashed = await bcrypt.hash('admin123', 10);
-      await new User({
-        name: 'Administrator',
-        username: 'admin',
-        password: hashed,
-        role: 'admin',
-        rfid_uid: 'ADMIN000',
-        attendance: []
-      }).save();
-      console.log('[INIT] Default admin created');
-    }
-  } catch (err) {
-    console.error('[INIT] Error:', err.message);
-  }
-})();
 
 // Auth middleware
 const auth = (req, res, next) => {
@@ -286,9 +282,6 @@ try {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', () => console.log(`Server jalan di port ${PORT}`));
 
 
 
