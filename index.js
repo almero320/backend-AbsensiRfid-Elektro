@@ -14,11 +14,11 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // untuk ESP32
 
-mongoose.connect(process.env.MONGO_URI || process.env.MONGO_URL, {
-  serverSelectionTimeoutMS: 15000,   // timeout lebih panjang biar ga cepet gagal
-  socketTimeoutMS: 45000,
+mongoose.connect(process.env.MONGO_URL, {
+  serverSelectionTimeoutMS: 30000,   // 30 detik timeout
+  socketTimeoutMS: 60000,
   connectTimeoutMS: 30000,
-  family: 4  // pakai IPv4 kalau IPv6 bermasalah di Railway
+  family: 4  // pakai IPv4 (Railway kadang IPv6 bermasalah)
 })
   .then(() => {
     console.log('[DB] MongoDB connected successfully');
@@ -342,6 +342,7 @@ try {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server jalan di port ${PORT}`));
+
 
 
 
