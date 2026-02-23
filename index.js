@@ -269,18 +269,8 @@ try {
   }
 });
 
-    // Return data terbaru untuk frontend
-    console.log('[ABSEN] Sukses untuk:', user.username);
-    res.json({
-      msg: 'Absen sukses',
-      name: user.name,
-      attendance: user.attendance  // kirim riwayat terbaru
-    });
-  } catch (err) {
-    console.error('[ABSEN] CRASH:', err.message, err.stack);
-    res.status(500).json({ msg: 'Server error saat proses absen', error: err.message });
-  }
-});
+
+
 
 
 
