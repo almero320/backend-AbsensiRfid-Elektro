@@ -175,7 +175,7 @@ app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-// Absen dari RFID - FIXED & ROBUST
+// Absen dari RFID - FIXED & ROBUST + WIB timezone
 app.get('/api/user/attendance', auth, async (req, res) => {
   try {
     console.log('[ATTENDANCE] User meminta rekap:', req.user.id);
@@ -185,11 +185,11 @@ app.get('/api/user/attendance', auth, async (req, res) => {
       return res.status(404).json({ msg: 'User tidak ditemukan' });
     }
 
-    // Pastikan tiap record ada clockIn & clockOut
     const attendance = (user.attendance || []).map((record) => ({
-      date: record.date || record.clockIn || new Date().toISOString(),
-      clockIn: record.clockIn || null,
-      clockOut: record.clockOut || null,
+      date: record.date ? new Date(record.date).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }) : null,
+      clockIn: record.clockIn ? new Date(record.clockIn).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) : null,
+      clockOut: record.clockOut ? new Date(record.clockOut).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) : null,
+      status: record.status || 'Hadir'
     }));
 
     res.json({ attendance });
@@ -199,7 +199,7 @@ app.get('/api/user/attendance', auth, async (req, res) => {
   }
 });
 
-  // Route /absen - support clock in & out
+// Route /absen - support clock in & out + WIB timezone
 app.post('/absen', async (req, res) => {
   const { uid } = req.body;
   console.log('[ABSEN] Request masuk - UID:', uid);
@@ -214,15 +214,14 @@ app.post('/absen', async (req, res) => {
 
     if (!user.face_verified) return res.status(403).json({ msg: 'Wajah belum diverifikasi' });
 
-    // Cek apakah hari ini sudah clock in atau belum
     const today = new Date().setHours(0, 0, 0, 0);
     const todayAttendance = user.attendance.find(a => {
       const aDate = new Date(a.date).setHours(0, 0, 0, 0);
       return aDate === today;
     });
 
-    let message = '';
     const now = new Date();
+    let message = '';
 
     if (!todayAttendance) {
       // Clock In pertama hari ini
@@ -239,36 +238,37 @@ app.post('/absen', async (req, res) => {
       message = 'Clock Out berhasil';
       console.log('[ABSEN] Clock Out:', user.username);
     } else {
-      // Sudah absen 2 kali hari ini
       return res.status(400).json({ msg: 'Sudah absen masuk & keluar hari ini' });
     }
 
     await user.save();
-
-    // Reset face_verified setelah absen
     await User.findByIdAndUpdate(user._id, { face_verified: false });
 
-    // Kirim ke Google Spreadsheet
-try {
-  const gsData = {
-    name: user.name,
-    clockIn: todayAttendance ? new Date(todayAttendance.clockIn).toLocaleTimeString('id-ID') : now.toLocaleTimeString('id-ID'),
-    clockOut: todayAttendance?.clockOut ? new Date(todayAttendance.clockOut).toLocaleTimeString('id-ID') : ""
-  };
+    // Kirim ke Google Spreadsheet dengan WIB timezone
+    try {
+      const gsData = {
+        name: user.name,
+        clockIn: todayAttendance?.clockIn
+          ? new Date(todayAttendance.clockIn).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
+          : now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        clockOut: todayAttendance?.clockOut
+          ? new Date(todayAttendance.clockOut).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
+          : ""
+      };
 
-  await axios.post(process.env.GOOGLE_SCRIPT_URL, gsData, {
-    headers: { 'Content-Type': 'application/json' }
-  });
-  console.log('[GS] Data absen terkirim ke spreadsheet');
-} catch (gsErr) {
-  console.error('[GS] Gagal kirim ke spreadsheet:', gsErr.message);
-}
+      await axios.post(process.env.GOOGLE_SCRIPT_URL, gsData, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      console.log('[GS] Data absen terkirim ke spreadsheet');
+    } catch (gsErr) {
+      console.error('[GS] Gagal kirim ke spreadsheet:', gsErr.message);
+    }
 
-    // Kirim WA (opsional, tetap jalan)
+    // Kirim WA (opsional) dengan WIB timezone
     try {
       const data = new FormData();
       data.append('target', '6289649085403');
-      data.append('message', `${message}!\nNama: ${user.name}\nWaktu: ${now.toLocaleString('id-ID')}`);
+      data.append('message', `${message}!\nNama: ${user.name}\nWaktu: ${now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`);
       await axios.post('https://api.fonnte.com/send', data, {
         headers: { ...data.getHeaders(), Authorization: process.env.FONNTE_TOKEN }
       });
@@ -282,7 +282,6 @@ try {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
-
 
 
 
