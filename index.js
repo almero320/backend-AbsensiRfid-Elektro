@@ -189,59 +189,6 @@ app.get('/api/user/attendance', auth, async (req, res) => {
   }
 });
 
-app.post('/absen', async (req, res) => {
-  console.log('[ABSEN] Request masuk. Body:', req.body);
-
-  const uid = req.body.uid;
-  if (!uid) {
-    console.log('[ABSEN] UID tidak ada');
-    return res.status(400).json({ msg: 'UID tidak ada' });
-  }
-
-  const upperUid = uid.toUpperCase().trim();
-  console.log('[ABSEN] UID normalized:', upperUid);
-
-  try {
-    const user = await User.findOne({ rfid_uid: upperUid });
-    if (!user) {
-      console.log('[ABSEN] RFID tidak terdaftar:', upperUid);
-      return res.status(404).json({ msg: 'RFID tidak terdaftar' });
-    }
-
-    console.log('[ABSEN] User ditemukan:', user.username, 'face_verified:', user.face_verified);
-
-    if (!user.face_verified) {
-      console.log('[ABSEN] Wajah belum diverifikasi');
-      return res.status(403).json({ msg: 'Wajah belum diverifikasi' });
-    }
-
-    // Pastikan attendance array
-    if (!Array.isArray(user.attendance)) {
-      user.attendance = [];
-      console.log('[ABSEN] Attendance diperbaiki menjadi array');
-    }
-
-    user.attendance.push({ date: new Date(), status: 'Hadir' });
-    await user.save();
-    console.log('[ABSEN] Attendance disimpan, total:', user.attendance.length);
-
-    // Reset face_verified
-    await User.findByIdAndUpdate(user._id, { face_verified: false });
-    console.log('[ABSEN] face_verified direset');
-
-    // Fonnte WA
-    try {
-      const data = new FormData();
-      data.append('target', '6282227097005');
-      data.append('message', `Absen berhasil!\nNama: ${user.name}\nWaktu: ${new Date().toLocaleString('id-ID')}`);
-      await axios.post('https://api.fonnte.com/send', data, {
-        headers: { ...data.getHeaders(), Authorization: process.env.FONNTE_TOKEN }
-      });
-      console.log('[ABSEN] WA terkirim');
-    } catch (waErr) {
-      console.error('[ABSEN] Fonnte WA gagal:', waErr.message);
-    }
-
   // Route /absen - support clock in & out
 app.post('/absen', async (req, res) => {
   const { uid } = req.body;
@@ -342,6 +289,7 @@ try {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server jalan di port ${PORT}`));
+
 
 
 
