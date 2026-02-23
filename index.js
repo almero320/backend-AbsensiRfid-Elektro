@@ -184,7 +184,15 @@ app.get('/api/user/attendance', auth, async (req, res) => {
       console.log('[ATTENDANCE] User tidak ditemukan');
       return res.status(404).json({ msg: 'User tidak ditemukan' });
     }
-    res.json({ attendance: user.attendance || [] });
+
+    // Pastikan tiap record ada clockIn & clockOut
+    const attendance = (user.attendance || []).map((record) => ({
+      date: record.date || record.clockIn || new Date().toISOString(),
+      clockIn: record.clockIn || null,
+      clockOut: record.clockOut || null,
+    }));
+
+    res.json({ attendance });
   } catch (err) {
     console.error('[ATTENDANCE] Error:', err.message);
     res.status(500).json({ msg: 'Server error' });
@@ -274,6 +282,7 @@ try {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
+
 
 
 
