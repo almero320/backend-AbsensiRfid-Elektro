@@ -10,7 +10,13 @@ const axios = require('axios');
 const app = express();
 
 // Middleware penting
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: true, // auto reflect origin
+  credentials: true,
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
+app.options('*', cors()); // penting buat preflight
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // untuk ESP32
 
@@ -268,6 +274,7 @@ try {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
+
 
 
 
