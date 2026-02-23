@@ -14,9 +14,19 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // untuk ESP32
 
-mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:LpYbZFaRrxQImOytpSUDuSBlXeawdBNJ@caboose.proxy.rlwy.net:46445/absensi_db')
-  .then(() => console.log('[DB] MongoDB connected successfully'))
-  .catch(err => console.error('[DB] MongoDB error:', err.message, err.stack));
+mongoose.connect(process.env.MONGO_URL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 15000,   // naikkan timeout biar ga cepet gagal
+  socketTimeoutMS: 45000,
+})
+  .then(() => {
+    console.log('[DB] MongoDB connected successfully');
+  })
+  .catch(err => {
+    console.error('[DB] MongoDB connection error:', err.message);
+    console.error('[DB] Full error stack:', err.stack);
+  });
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -332,5 +342,6 @@ try {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Server jalan di port ${PORT}`));
+
 
 
