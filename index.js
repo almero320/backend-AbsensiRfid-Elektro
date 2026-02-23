@@ -244,25 +244,23 @@ app.post('/absen', async (req, res) => {
     await user.save();
     await User.findByIdAndUpdate(user._id, { face_verified: false });
 
-    // Kirim ke Google Spreadsheet dengan WIB timezone
-    try {
-      const gsData = {
-        name: user.name,
-        clockIn: todayAttendance?.clockIn
-          ? new Date(todayAttendance.clockIn).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-          : now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }),
-        clockOut: todayAttendance?.clockOut
-          ? new Date(todayAttendance.clockOut).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
-          : ""
-      };
+    // Kirim ke Google Spreadsheet
+try {
+  const gsData = {
+    name: user.name,
+    clockIn: now.toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' }),
+    clockOut: todayAttendance?.clockOut
+      ? new Date(todayAttendance.clockOut).toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' })
+      : ''
+  };
 
-      await axios.post(process.env.GOOGLE_SCRIPT_URL, gsData, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      console.log('[GS] Data absen terkirim ke spreadsheet');
-    } catch (gsErr) {
-      console.error('[GS] Gagal kirim ke spreadsheet:', gsErr.message);
-    }
+  await axios.post(process.env.GOOGLE_SCRIPT_URL, gsData, {
+    headers: { 'Content-Type': 'application/json' }
+  });
+  console.log('[GS] Data absen terkirim ke spreadsheet');
+} catch (gsErr) {
+  console.error('[GS] Gagal kirim ke spreadsheet:', gsErr.message);
+}
 
     // Kirim WA (opsional) dengan WIB timezone
     try {
@@ -282,6 +280,7 @@ app.post('/absen', async (req, res) => {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
+
 
 
 
