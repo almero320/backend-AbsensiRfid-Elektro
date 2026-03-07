@@ -189,6 +189,31 @@ app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
+//attendance endpoint
+app.get('/api/user/attendance', auth, async (req, res) => {
+  try {
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ msg: 'User tidak ditemukan' });
+    }
+
+    res.json({
+      attendance: user.attendance || []
+    });
+
+  } catch (err) {
+
+    console.error('[ATTENDANCE ERROR]', err);
+
+    res.status(500).json({
+      msg: 'Server error'
+    });
+
+  }
+});
+
 // Absen dari RFID - FIXED & ROBUST + WIB timezone
 app.post('/absen', async (req, res) => {
 
@@ -321,6 +346,7 @@ app.post('/absen', async (req, res) => {
   }
 
 });
+
 
 
 
