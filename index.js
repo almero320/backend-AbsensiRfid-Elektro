@@ -9,6 +9,20 @@ const axios = require('axios');
 
 const app = express();
 
+async function getJakartaTime() {
+  try {
+    const res = await axios.get(
+      "https://worldtimeapi.org/api/timezone/Asia/Jakarta"
+    );
+
+    return new Date(res.data.datetime);
+
+  } catch (err) {
+    console.log("[TIME] fallback ke server time");
+    return new Date();
+  }
+}
+
 // Middleware penting
 app.use(cors({
   origin: true, // auto reflect origin
@@ -178,71 +192,106 @@ app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
 // Absen dari RFID - FIXED & ROBUST + WIB timezone
 app.get('/api/user/attendance', auth, async (req, res) => {
   try {
-    console.log('[ATTENDANCE] User meminta rekap:', req.user.id);
+    console.log('[ATTENDANCE] request dari:', req.user.id);
+
     const user = await User.findById(req.user.id);
+
     if (!user) {
-      console.log('[ATTENDANCE] User tidak ditemukan');
       return res.status(404).json({ msg: 'User tidak ditemukan' });
     }
 
-    const attendance = (user.attendance || []).map((record) => ({
-      date: record.date ? new Date(record.date).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }) : null,
-      clockIn: record.clockIn ? new Date(record.clockIn).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) : null,
-      clockOut: record.clockOut ? new Date(record.clockOut).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) : null,
-      status: record.status || 'Hadir'
-    }));
+    // kirim raw data dari database
+    res.json({
+      attendance: user.attendance || []
+    });
 
-    res.json({ attendance });
   } catch (err) {
-    console.error('[ATTENDANCE] Error:', err.message);
+    console.error('[ATTENDANCE] Error:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 });
 
 // Route /absen - support clock in & out + WIB timezone
 app.post('/absen', async (req, res) => {
+
   const { uid } = req.body;
-  console.log('[ABSEN] Request masuk - UID:', uid);
+
+  console.log('[ABSEN] Request masuk UID:', uid);
 
   if (!uid) return res.status(400).json({ msg: 'UID tidak ada' });
 
   const upperUid = uid.toUpperCase().trim();
 
   try {
+
     const user = await User.findOne({ rfid_uid: upperUid });
-    if (!user) return res.status(404).json({ msg: 'RFID tidak terdaftar' });
 
-    if (!user.face_verified) return res.status(403).json({ msg: 'Wajah belum diverifikasi' });
+    if (!user)
+      return res.status(404).json({ msg: 'RFID tidak terdaftar' });
 
-    const today = new Date().setHours(0, 0, 0, 0);
+    if (!user.face_verified)
+      return res.status(403).json({ msg: 'Wajah belum diverifikasi' });
+
+    // ambil waktu WIB dari internet
+    const now = await getJakartaTime();
+
+    const todayStr = now.toISOString().slice(0,10);
+
     const todayAttendance = user.attendance.find(a => {
-      const aDate = new Date(a.date).setHours(0, 0, 0, 0);
-      return aDate === today;
+      return new Date(a.date).toISOString().slice(0,10) === todayStr;
     });
 
-    const now = new Date();
     let message = '';
 
     if (!todayAttendance) {
-      // Clock In pertama hari ini
+
       user.attendance.push({
         date: now,
         clockIn: now,
         status: 'Hadir'
       });
+
       message = 'Clock In berhasil';
+
       console.log('[ABSEN] Clock In:', user.username);
+
     } else if (!todayAttendance.clockOut) {
-      // Clock Out
+
       todayAttendance.clockOut = now;
+
       message = 'Clock Out berhasil';
+
       console.log('[ABSEN] Clock Out:', user.username);
+
     } else {
-      return res.status(400).json({ msg: 'Sudah absen masuk & keluar hari ini' });
+
+      return res.status(400).json({
+        msg: 'Sudah absen masuk & keluar hari ini'
+      });
+
     }
 
     await user.save();
+
     await User.findByIdAndUpdate(user._id, { face_verified: false });
+
+    res.json({
+      msg: message,
+      name: user.name,
+      time: now
+    });
+
+  } catch (err) {
+
+    console.error('[ABSEN ERROR]', err);
+
+    res.status(500).json({
+      msg: 'Server error'
+    });
+
+  }
+
+});
 
     // Kirim ke Google Spreadsheet
 try {
@@ -280,6 +329,7 @@ try {
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
+
 
 
 
