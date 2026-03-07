@@ -190,33 +190,9 @@ app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
 });
 
 // Absen dari RFID - FIXED & ROBUST + WIB timezone
-app.get('/api/user/attendance', auth, async (req, res) => {
-  try {
-    console.log('[ATTENDANCE] request dari:', req.user.id);
-
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({ msg: 'User tidak ditemukan' });
-    }
-
-    // kirim raw data dari database
-    res.json({
-      attendance: user.attendance || []
-    });
-
-  } catch (err) {
-    console.error('[ATTENDANCE] Error:', err);
-    res.status(500).json({ msg: 'Server error' });
-  }
-});
-
-// Route /absen - support clock in & out + WIB timezone
 app.post('/absen', async (req, res) => {
 
   const { uid } = req.body;
-
-  console.log('[ABSEN] Request masuk UID:', uid);
 
   if (!uid) return res.status(400).json({ msg: 'UID tidak ada' });
 
@@ -232,14 +208,13 @@ app.post('/absen', async (req, res) => {
     if (!user.face_verified)
       return res.status(403).json({ msg: 'Wajah belum diverifikasi' });
 
-    // ambil waktu WIB dari internet
     const now = await getJakartaTime();
 
     const todayStr = now.toISOString().slice(0,10);
 
-    const todayAttendance = user.attendance.find(a => {
-      return new Date(a.date).toISOString().slice(0,10) === todayStr;
-    });
+    const todayAttendance = user.attendance.find(a =>
+      new Date(a.date).toISOString().slice(0,10) === todayStr
+    );
 
     let message = '';
 
@@ -253,15 +228,11 @@ app.post('/absen', async (req, res) => {
 
       message = 'Clock In berhasil';
 
-      console.log('[ABSEN] Clock In:', user.username);
-
     } else if (!todayAttendance.clockOut) {
 
       todayAttendance.clockOut = now;
 
       message = 'Clock Out berhasil';
-
-      console.log('[ABSEN] Clock Out:', user.username);
 
     } else {
 
@@ -275,59 +246,80 @@ app.post('/absen', async (req, res) => {
 
     await User.findByIdAndUpdate(user._id, { face_verified: false });
 
+    // =========================
+    // GOOGLE SPREADSHEET
+    // =========================
+
+    try {
+
+      const gsData = {
+        name: user.name,
+        clockIn: now.toLocaleTimeString('id-ID',{hour12:false,timeZone:'Asia/Jakarta'}),
+        clockOut: todayAttendance?.clockOut
+          ? new Date(todayAttendance.clockOut).toLocaleTimeString('id-ID',{hour12:false,timeZone:'Asia/Jakarta'})
+          : ''
+      };
+
+      await axios.post(process.env.GOOGLE_SCRIPT_URL, gsData,{
+        headers:{'Content-Type':'application/json'}
+      });
+
+      console.log('[GS] Data absen terkirim');
+
+    } catch(gsErr){
+
+      console.error('[GS] gagal:', gsErr.message);
+
+    }
+
+    // =========================
+    // WHATSAPP NOTIFICATION
+    // =========================
+
+    try {
+
+      const data = new FormData();
+
+      data.append('target','6289649085403');
+
+      data.append(
+        'message',
+        `${message}!\nNama: ${user.name}\nWaktu: ${now.toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})}`
+      );
+
+      await axios.post(
+        'https://api.fonnte.com/send',
+        data,
+        {
+          headers:{
+            ...data.getHeaders(),
+            Authorization: process.env.FONNTE_TOKEN
+          }
+        }
+      );
+
+    } catch(waErr){
+
+      console.error('[WA] gagal:', waErr.message);
+
+    }
+
     res.json({
       msg: message,
       name: user.name,
       time: now
     });
 
-  } catch (err) {
+  } catch(err){
 
     console.error('[ABSEN ERROR]', err);
 
     res.status(500).json({
-      msg: 'Server error'
+      msg:'Server error'
     });
 
   }
 
-});
-
-    // Kirim ke Google Spreadsheet
-try {
-  const gsData = {
-    name: user.name,
-    clockIn: now.toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' }),
-    clockOut: todayAttendance?.clockOut
-      ? new Date(todayAttendance.clockOut).toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' })
-      : ''
-  };
-
-  await axios.post(process.env.GOOGLE_SCRIPT_URL, gsData, {
-    headers: { 'Content-Type': 'application/json' }
-  });
-  console.log('[GS] Data absen terkirim ke spreadsheet');
-} catch (gsErr) {
-  console.error('[GS] Gagal kirim ke spreadsheet:', gsErr.message);
-}
-
-    // Kirim WA (opsional) dengan WIB timezone
-    try {
-      const data = new FormData();
-      data.append('target', '6289649085403');
-      data.append('message', `${message}!\nNama: ${user.name}\nWaktu: ${now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`);
-      await axios.post('https://api.fonnte.com/send', data, {
-        headers: { ...data.getHeaders(), Authorization: process.env.FONNTE_TOKEN }
-      });
-    } catch (waErr) {
-      console.error('[WA] Gagal kirim:', waErr.message);
-    }
-
-    res.json({ msg: message, name: user.name });
-  } catch (err) {
-    console.error('[ABSEN] Error:', err.message, err.stack);
-    res.status(500).json({ msg: 'Server error', error: err.message });
-  }
 });
 
 
