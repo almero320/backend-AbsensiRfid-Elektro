@@ -10,17 +10,17 @@ const axios = require('axios');
 const app = express();
 
 async function getJakartaTime() {
-  try {
-    const res = await axios.get(
-      "https://worldtimeapi.org/api/timezone/Asia/Jakarta"
-    );
+  return new Promise((resolve) => {
+    ntpClient.getNetworkTime("id.pool.ntp.org", 123, (err, date) => {
 
-    return new Date(res.data.datetime);
+      if (err) {
+        console.log("[NTP] fallback ke server time");
+        return resolve(new Date());
+      }
 
-  } catch (err) {
-    console.log("[TIME] fallback ke server time");
-    return new Date();
-  }
+      resolve(date);
+    });
+  });
 }
 
 // Middleware penting
@@ -346,6 +346,7 @@ app.post('/absen', async (req, res) => {
   }
 
 });
+
 
 
 
